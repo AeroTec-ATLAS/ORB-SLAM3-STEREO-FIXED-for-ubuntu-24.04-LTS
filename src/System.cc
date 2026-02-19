@@ -1545,5 +1545,17 @@ string System::CalculateCheckSum(string filename, int type)
     return checksum;
 }
 
+/////// BACALHAU COM NATAS, PIZZA COM ANANÁS - Pedro Vicente
+// Modificado
+
+void System::SaveMapPoints(const string &filename) {
+       ofstream f(filename);
+       for (auto* mp : mpAtlas->GetAllMapPoints()) {
+           if (!mp || mp->isBad()) continue;
+           Eigen::Vector3f p = mp->GetWorldPos();
+           f << p.x() << " " << p.y() << " " << p.z() << "\n";
+	}
+}
+
 } //namespace ORB_SLAM
 
