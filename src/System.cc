@@ -1408,7 +1408,11 @@ void System::SaveAtlas(int type){
         // Save the current session
         mpAtlas->PreSave();
 
-        string pathSaveFileName = "./";
+        string pathSaveFileName = "";
+        // if user specifies an absolute path, don't do anything silly
+        if (mStrSaveAtlasToFile[0] != '/') {
+            pathSaveFileName = "./";
+        }
         pathSaveFileName = pathSaveFileName.append(mStrSaveAtlasToFile);
         pathSaveFileName = pathSaveFileName.append(".osa");
 
@@ -1545,8 +1549,6 @@ string System::CalculateCheckSum(string filename, int type)
     return checksum;
 }
 
-/////// BACALHAU COM NATAS, PIZZA COM ANANÁS - Pedro Vicente
-// Modificado
 
 void System::SaveMapPoints(const string &filename) {
        ofstream f(filename);
