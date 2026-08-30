@@ -13,26 +13,40 @@ This repository contains ORB-SLAM3 with fixes and modifications for compatibilit
 ## Prerequisites
 
 ### 1. Install Build Tools
+
 ```bash
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y build-essential cmake git pkg-config
 ```
 
 ### 2. Install Core Dependencies
+
 ```bash
 # Eigen3 (Linear algebra library)
 sudo apt install -y libeigen3-dev
 
-# OpenCV 4.6.0 (Computer vision library)
+# OpenCV (Computer vision library)
 sudo apt install -y libopencv-dev
 
 # Pangolin dependencies
 sudo apt install -y libglfw3-dev libgl1-mesa-dev libglu1-mesa-dev libepoxy-dev
+
+# Boost serialization (required by DBoW2 / the main library)
+sudo apt install -y libboost-serialization-dev
 ```
+
+> **Check your OpenCV version before building** — this matters more than it sounds:
+>
+> ```bash
+> pkg-config --modversion opencv4
+> ```
+>
+> The version-pinned `find_package(OpenCV X.Y ...)` calls in `CMakeLists.txt` and `Thirdparty/DBoW2/CMakeLists.txt` must match (or be compatible with) whatever `libopencv-dev` actually installed on your system — Ubuntu 24.04 has shipped different OpenCV point releases (e.g. 4.5.4, 4.6.0) depending on when packages were pulled. If your version doesn't match the pin in those two files, `find_package` silently fails to find OpenCV and you'll see `OpenCV > 3.0 not found` (from DBoW2) or a similar fatal error from the top-level CMakeLists.txt. See [Troubleshooting](#troubleshooting) below for the fix.
 
 ### 3. Install Optional Dependencies
 
 #### For RealSense Camera Support
+
 If you plan to use Intel RealSense cameras, build librealsense from source:
 
 ```bash
@@ -48,7 +62,14 @@ git clone https://github.com/IntelRealSense/librealsense.git
 cd librealsense
 git checkout v2.55.1
 
-mkdir build && cd build
+# NOTE: if you're re-running this and a build/ directory already exists
+# from a previous attempt, `mkdir build` will fail and `cd build` will
+# silently never run (because of `&&`), which then makes every command
+# after this operate on the wrong directory. Use one of:
+rm -rf build && mkdir build && cd build
+# or, if the directory is already there and safe to reuse:
+# mkdir -p build && cd build
+
 cmake .. \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_WITH_DDS=false \
@@ -59,14 +80,17 @@ make -j$(nproc)
 sudo make install
 sudo ldconfig
 
-# Setup udev rules
+# Setup udev rules (host only — see note below if building in a container)
 sudo cp ../config/99-realsense-libusb.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
+> **Building inside a container?** The udev rules step above only makes sense on a real Linux host with udev/systemd running. Most containers don't have `/etc/udev` at all, and `udevadm` won't be installed — that's expected, not a bug. Handle device permissions on the **host**, and pass the RealSense device through to the container at startup (e.g. `-v /dev/bus/usb:/dev/bus/usb` or `--privileged` for testing), then skip the udev step inside the container entirely.
+
 ## Installation
 
 ### 1. Setup Directory Structure
+
 ```bash
 # Create workspace
 cd ~
@@ -78,6 +102,7 @@ echo "export ORB_SLAM3_ROOT_PATH=~/orb-slam3-root" >> ~/.bashrc
 ```
 
 ### 2. Build Pangolin
+
 ```bash
 cd $ORB_SLAM3_ROOT_PATH
 
@@ -93,11 +118,13 @@ make -j$(nproc)
 ```
 
 **Test Pangolin** (optional):
+
 ```bash
 $ORB_SLAM3_ROOT_PATH/Pangolin/build/examples/HelloPangolin/HelloPangolin
 ```
 
 ### 3. Clone This Repository
+
 ```bash
 cd $ORB_SLAM3_ROOT_PATH
 git clone <YOUR_FORKED_REPO_URL> ORB-SLAM3
@@ -105,12 +132,14 @@ cd ORB-SLAM3
 ```
 
 ### 4. Build ORB-SLAM3
+
 ```bash
 chmod +x build.sh
 ./build.sh
 ```
 
 The build process will:
+
 - Compile DBoW2 (vocabulary management)
 - Compile g2o (graph optimization)
 - Compile Sophus (Lie algebra)
@@ -118,6 +147,7 @@ The build process will:
 - Build ORB-SLAM3 library and examples
 
 ### 5. Install Sophus Globally
+
 This step is required if you plan to use ORB-SLAM3 with ROS2:
 
 ```bash
@@ -126,6 +156,7 @@ sudo make install
 ```
 
 To uninstall later:
+
 ```bash
 sudo rm -rf /usr/local/include/sophus
 sudo rm -rf /usr/local/share/sophus
@@ -134,6 +165,7 @@ sudo rm -rf /usr/local/share/sophus
 ## Testing
 
 ### Option 1: Test with Webcam
+
 ```bash
 cd $ORB_SLAM3_ROOT_PATH/ORB-SLAM3
 ./Examples/Monocular/mono_tum Vocabulary/ORBvoc.txt Examples/Monocular/TUM1.yaml
@@ -142,6 +174,7 @@ cd $ORB_SLAM3_ROOT_PATH/ORB-SLAM3
 Move your camera around. You should see feature tracking and map building in real-time.
 
 ### Option 2: Test with EuRoC Dataset
+
 Download the MH_01_easy sequence:
 
 ```bash
@@ -167,6 +200,7 @@ cd ..
 ```
 
 ### Option 3: Test with TUM RGB-D Dataset
+
 ```bash
 cd $ORB_SLAM3_ROOT_PATH/ORB-SLAM3/datasets
 mkdir TUM && cd TUM
@@ -190,25 +224,30 @@ cd $ORB_SLAM3_ROOT_PATH/ORB-SLAM3
 After successful build, you'll find these executables in `Examples/`:
 
 ### Monocular
+
 - `mono_euroc` - EuRoC MAV dataset
 - `mono_kitti` - KITTI dataset
 - `mono_tum` - TUM monocular
 - `mono_tum_vi` - TUM VI dataset
 
 ### Monocular-Inertial
+
 - `mono_inertial_euroc` - EuRoC with IMU
 - `mono_inertial_tum_vi` - TUM VI with IMU
 
 ### Stereo
+
 - `stereo_euroc` - EuRoC stereo
 - `stereo_kitti` - KITTI stereo
 - `stereo_tum_vi` - TUM VI stereo
 
 ### Stereo-Inertial
+
 - `stereo_inertial_euroc` - EuRoC stereo with IMU
 - `stereo_inertial_tum_vi` - TUM VI stereo with IMU
 
 ### RGB-D
+
 - `rgbd_tum` - TUM RGB-D dataset
 
 ## Key Modifications for Ubuntu 24.04
@@ -216,31 +255,37 @@ After successful build, you'll find these executables in `Examples/`:
 This repository includes the following fixes for Ubuntu 24.04 compatibility:
 
 1. **CMakeLists.txt** (line 33):
+
    ```cmake
-   find_package(OpenCV 4.6)  # Matches Ubuntu 24.04 default
+   find_package(OpenCV 4.6)  # Match this to your installed OpenCV version — see Troubleshooting
    ```
 
 2. **CMakeLists.txt** (line 41):
+
    ```cmake
    find_package(Eigen3 REQUIRED)  # Version number removed
    ```
 
 3. **ThirdParty/DBoW2/CMakeLists.txt** (line 32):
+
    ```cmake
-   find_package(OpenCV 4.6 QUIET)
+   find_package(OpenCV 4.6 QUIET)  # Match this to your installed OpenCV version — see Troubleshooting
    ```
 
 4. **ThirdParty/Sophus/CMakeLists.txt** (line 23):
+
    ```cmake
    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -Wextra -std=c++11 -Wno-error=array-bounds -Wno-deprecated-declarations -ftemplate-backtrace-limit=0")
    ```
 
 5. **ThirdParty/Sophus/CMakeLists.txt** (line 35):
+
    ```cmake
    find_package(Eigen3 REQUIRED)  # Version number removed
    ```
 
 6. **Examples/Monocular/mono_euroc.cc** (line 83):
+
    ```cpp
    ORB_SLAM3::System SLAM(argv[1],argv[2],ORB_SLAM3::System::MONOCULAR, true);
    // Viewer enabled by default
@@ -266,29 +311,47 @@ export LD_LIBRARY_PATH="$ORB_SLAM3_ROOT_PATH/Pangolin/build:$LD_LIBRARY_PATH"
 **Problem**: `error: 'array' was not declared in this scope`
 **Solution**: Already fixed in this repository. Ensure you're using the modified Sophus CMakeLists.txt.
 
-**Problem**: OpenCV version mismatch
-**Solution**: 
-```bash
-# Check your OpenCV version
-pkg-config --modversion opencv4
+**Problem**: `CMake Error: OpenCV > 3.0 not found.` (from `Thirdparty/DBoW2/CMakeLists.txt`) or a similar OpenCV-not-found error from the top-level `CMakeLists.txt`
+**Solution**: This almost always means the OpenCV version pin in `find_package(OpenCV X.Y ...)` doesn't match what's actually installed. Check your installed version:
 
-# Should be 4.6.0 on Ubuntu 24.04
+```bash
+pkg-config --modversion opencv4
 ```
+
+Then edit the version number in **both**:
+- `CMakeLists.txt` (`find_package(OpenCV 4.6)`)
+- `Thirdparty/DBoW2/CMakeLists.txt` (`find_package(OpenCV 4.6 QUIET)`)
+
+to match, e.g. `find_package(OpenCV 4.5 QUIET)` for OpenCV 4.5.4 — or drop the version number entirely (`find_package(OpenCV QUIET)`) to accept any OpenCV 3+/4.x.
+
+**Problem**: `fatal error: boost/serialization/serialization.hpp: No such file or directory`
+**Solution**: Boost's serialization headers aren't installed. Run:
+
+```bash
+sudo apt install -y libboost-serialization-dev
+```
+
+then re-run `./build.sh`.
 
 **Problem**: RealSense warnings about fastcdr/fastrtps
 **Solution**: This is harmless if you don't use RealSense. To fix completely, rebuild librealsense with `-DBUILD_WITH_DDS=false` (see Prerequisites section).
+
+**Problem**: `mkdir: cannot create directory 'build': File exists` followed by CMake, make, and `cp` errors that all look like they're operating on the wrong directory
+**Solution**: This happens when re-running a `mkdir build && cd build` command after `build/` already exists from a previous attempt — `mkdir` fails, so (because of `&&`) `cd build` never runs, and every following command executes one directory up. Use `rm -rf build && mkdir build && cd build` to reset, or `mkdir -p build && cd build` if you just want to reuse the existing directory.
 
 ### Runtime Errors
 
 **Problem**: Segmentation fault when loading vocabulary
 **Solution**: Ensure you've extracted the vocabulary:
+
 ```bash
 cd $ORB_SLAM3_ROOT_PATH/ORB-SLAM3/Vocabulary
 tar -xf ORBvoc.txt.tar.gz
 ```
 
 **Problem**: Camera not detected
-**Solution**: 
+**Solution**:
+
 ```bash
 # Check camera device
 ls -l /dev/video*
@@ -297,8 +360,11 @@ ls -l /dev/video*
 v4l2-ctl --list-devices
 ```
 
+If you're running inside a container, make sure the camera/USB device was actually passed through at container start (see the RealSense note in Prerequisites) — a missing device mapping looks identical to a driver problem from inside the container.
+
 **Problem**: Black screen/no tracking
-**Solution**: 
+**Solution**:
+
 - Ensure adequate lighting
 - Move camera slowly at first
 - Point at textured surfaces (not blank walls)
@@ -309,10 +375,10 @@ v4l2-ctl --list-devices
 1. **CPU Usage**: ORB-SLAM3 is CPU-intensive. For best performance:
    - Close unnecessary applications
    - Use `make -j$(nproc)` to utilize all cores during build
-   
+
 2. **Memory**: The vocabulary file loads into RAM (~80MB). Ensure sufficient memory.
 
-3. **Real-time Performance**: 
+3. **Real-time Performance**:
    - Monocular: 30 FPS on modern CPUs
    - Stereo: 20-30 FPS
    - RGB-D: 30 FPS
@@ -323,11 +389,11 @@ If you use ORB-SLAM3 in your research, please cite:
 
 ```bibtex
 @article{ORBSLAM3_TRO,
-  title={{ORB-SLAM3}: An Accurate Open-Source Library for Visual, Visual-Inertial 
+  title={{ORB-SLAM3}: An Accurate Open-Source Library for Visual, Visual-Inertial
          and Multi-Map {SLAM}},
-  author={Campos, Carlos AND Elvira, Richard AND Rodriguez, Juan J. G\'omez AND 
+  author={Campos, Carlos AND Elvira, Richard AND Rodriguez, Juan J. G\'omez AND
           Montiel, Jos\'e M. M. AND Tard\'os, Juan D.},
-  journal={IEEE Transactions on Robotics}, 
+  journal={IEEE Transactions on Robotics},
   volume={37},
   number={6},
   pages={1874-1890},
@@ -337,7 +403,7 @@ If you use ORB-SLAM3 in your research, please cite:
 
 ## License
 
-ORB-SLAM3 is released under [GPLv3 license](LICENSE).
+ORB-SLAM3 is released under a [GPLv3 license](LICENSE).
 
 ## Acknowledgments
 
